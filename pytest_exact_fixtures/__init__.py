@@ -23,7 +23,7 @@ def pytest_configure(config):
 
 def layer_key(fi, argnames):
     all_argnames = sorted(set(names_closure(fi, argnames)))
-    return tuple(fi.name2fixturedefs[name] for name in all_argnames)
+    return tuple(tuple(fi.name2fixturedefs[name]) for name in all_argnames)
 
 
 class FixtureConflict(Exception):
