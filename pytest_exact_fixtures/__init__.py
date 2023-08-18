@@ -94,7 +94,7 @@ class LayerManager(object):
             for d in self.gather(seen, base, required):
                 yield d
 
-    @pytest.mark.trylast
+    @pytest.hookimpl(trylast=True)
     def pytest_collection_modifyitems(self, session, config, items):
         ''' Reorder tests to minimize fixture setups/teardowns
         '''
@@ -129,7 +129,7 @@ class LayerManager(object):
         for i, layer in enumerate(layers):
             print(layer.weight, layer)
 
-    @pytest.mark.tryfirst
+    @pytest.hookimpl(tryfirst=True)
     def pytest_runtest_setup(self, item):
         ''' Proactively setup shared fixtures in order
         '''
@@ -157,7 +157,7 @@ class LayerManager(object):
                 #print("SETUP: %s (%s)" % (fd[-1].argname, fd[-1].scope))
                 item.funcargs[argname] = item._request.getfixturevalue(argname)
 
-    @pytest.mark.trylast
+    @pytest.hookimpl(trylast=True)
     def pytest_runtest_teardown(self, item, nextitem):
         ''' Teardown unused fixtures
         '''
