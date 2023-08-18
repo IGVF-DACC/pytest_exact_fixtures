@@ -2,13 +2,13 @@ import pytest
 
 active = set()
 
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def alternative1():
     active.add('alternative1')
     yield
     active.remove('alternative1')
 
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def alternative2():
     active.add('alternative2')
     yield

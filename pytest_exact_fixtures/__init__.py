@@ -4,14 +4,16 @@ Make pytest fixtures work more like zope.testrunner layers:
 
 https://pypi.python.org/pypi/zope.testrunner#layers
 '''
-from _pytest.fixtures import (
-    scopes,
-    scopenum_function,
-)
 from collections import defaultdict
 import operator
 import pytest
 
+scopes = ['session', 'package', 'module', 'class', 'function']
+
+scopenum_function = 4
+
+def scope_num(scope):
+    return scopes.index(scope)
 
 def pytest_configure(config):
     layer_manager = LayerManager(config)
@@ -21,7 +23,7 @@ def pytest_configure(config):
 
 def layer_key(fi, argnames):
     all_argnames = sorted(set(names_closure(fi, argnames)))
-    return tuple(fi.name2fixturedefs[name] for name in all_argnames)
+    return tuple(tuple(fi.name2fixturedefs[name]) for name in all_argnames)
 
 
 class FixtureConflict(Exception):
@@ -54,7 +56,7 @@ class LayerManager(object):
             fd = fi.name2fixturedefs.get(name)
             if fd is None:
                 continue
-            if fd[-1].scopenum < scopenum_function:
+            if scope_num(fd[-1].scope) < scopenum_function:
                 yield name
 
     def sorted_layers(self):
@@ -92,7 +94,7 @@ class LayerManager(object):
             for d in self.gather(seen, base, required):
                 yield d
 
-    @pytest.mark.trylast
+    @pytest.hookimpl(trylast=True)
     def pytest_collection_modifyitems(self, session, config, items):
         ''' Reorder tests to minimize fixture setups/teardowns
         '''
@@ -127,7 +129,7 @@ class LayerManager(object):
         for i, layer in enumerate(layers):
             print(layer.weight, layer)
 
-    @pytest.mark.tryfirst
+    @pytest.hookimpl(tryfirst=True)
     def pytest_runtest_setup(self, item):
         ''' Proactively setup shared fixtures in order
         '''
@@ -142,11 +144,11 @@ class LayerManager(object):
                 continue
             if getattr(fixturedef[-1], 'unittest', False):
                 continue
-            if fixturedef[-1].scopenum >= scopenum:
+            if scope_num(fixturedef[-1].scope) >= scopenum:
                 continue
             layer = self.layers.get(layer_key(item._fixtureinfo, [argname]), None)
             weight = 1 if layer is None else layer.weight
-            key = (fixturedef[-1].scopenum, weight, argname, fixturedef)
+            key = (scope_num(fixturedef[-1].scope), weight, argname, fixturedef)
             keylist.append(key)
 
         keylist.sort()
@@ -155,7 +157,7 @@ class LayerManager(object):
                 #print("SETUP: %s (%s)" % (fd[-1].argname, fd[-1].scope))
                 item.funcargs[argname] = item._request.getfixturevalue(argname)
 
-    @pytest.mark.trylast
+    @pytest.hookimpl(trylast=True)
     def pytest_runtest_teardown(self, item, nextitem):
         ''' Teardown unused fixtures
         '''
@@ -172,7 +174,7 @@ class LayerManager(object):
                 continue
             layer = self.layers.get(layer_key(item._fixtureinfo, [argname]), None)
             weight = 1 if layer is None else layer.weight
-            key = (fixturedef[-1].scopenum, weight, argname, fixturedef)
+            key = (scope_num(fixturedef[-1].scope), weight, argname, fixturedef)
             keylist.append(key)
 
         fixturemanager = item.session.config.pluginmanager.getplugin("funcmanage")
@@ -212,7 +214,7 @@ class Layer(object):
         self.fixturedefs_closure = set(key)
         self.items = []
         self.deps = set()
-        self.scopenum = max(fd[-1].scopenum for fd in key) if key else scopenum_function
+        self.scopenum = max(scope_num(fd[-1].scope) for fd in key) if key else scopenum_function
 
         if len(argnames) == 1:
             fd = fi.name2fixturedefs[argnames[0]]
@@ -255,7 +257,7 @@ class Layer(object):
     def __repr__(self):
         return '<%s (%s) %s:%s [%s]>' % (
             type(self).__name__,
-            scopes[self.scopenum],
+            scopes[scope_num(self.scope)],
             self.baseid,
             self.argname if len(self.key) == 1 else '',
             ','.join(base.argname for base in self.bases),
